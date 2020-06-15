@@ -8,8 +8,6 @@ class Service:
     def __init__(self, latency: int):
         # latency is in ms
         self.latency = latency/1000
-        self.loop = None
-        self.server = None
 
     async def handle(self, reader, writer):
         await reader.read(1)
@@ -19,18 +17,15 @@ class Service:
         writer.close()
 
     async def serve(self):
-        self.server = await asyncio.start_server(self.handle, c.HOSTNAME, c.PORT_SERVICE)
-        self.server.get_loop().add_signal_handler(signal.SIGTERM, self.close)
+        server = await asyncio.start_server(self.handle, c.HOSTNAME, c.PORT_SERVICE)
+        server.get_loop().add_signal_handler(signal.SIGTERM, server.close)
 
         try:
-            await self.server.serve_forever()
+            await server.serve_forever()
         except asyncio.CancelledError:
             pass
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         await asyncio.gather(*tasks)
-
-    def close(self):
-        self.server.close()
 
 
 if __name__ == '__main__':
