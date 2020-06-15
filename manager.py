@@ -11,3 +11,18 @@ def service(latency: int):
     with subprocess.Popen([path, str(latency)], stdout=subprocess.PIPE) as proc:
         yield
         proc.send_signal(signal.SIGTERM)
+
+
+@contextmanager
+def async_server(latency: int):
+    with service(latency):
+        # latency is in ms
+        path = os.path.abspath('async_server.py')
+        with subprocess.Popen([path], stdout=subprocess.PIPE) as proc:
+            yield
+            proc.send_signal(signal.SIGTERM)
+
+
+if __name__ == '__main__':
+    with async_server(10000):
+        input()
