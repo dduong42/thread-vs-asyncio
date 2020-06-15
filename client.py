@@ -1,15 +1,17 @@
 import socket
 import time
-import constants as c
 from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Tuple
 
-ResponseTimes = namedtuple('ResponseTimes', ('short_time', 'long_time', 'short_succeed', 'long_succeed'))
+import constants as c
+
+ResponseTimes = namedtuple('ResponseTimes', ('short_time', 'long_time'))
 Stat = namedtuple('Stat', ('total_time', 'response_times'))
 
 
 def send_msg(msg: bytes) -> bool:
+    """Send a msg. Returns True on success, False otherwise"""
     sock = socket.create_connection((c.HOSTNAME, c.PORT))
     succeed = True
     try:
@@ -22,26 +24,22 @@ def send_msg(msg: bytes) -> bool:
     return True
 
 
-def send_short_request() -> bool:
-    """Send a short request. Returns True on success, False otherwise"""
-    return send_msg(c.SHORT)
-
-
-def send_long_request() -> bool:
-    """Send a long request. Returns True on success, False otherwise"""
-    return send_msg(c.LONG)
-
-
 def response_times(nb_requests: int, now=time.time_ns) -> List[ResponseTimes]:
     results = []
     for _ in range(nb_requests):
         start = now()
-        short_succeed = send_short_request()
+        short_succeed = send_msg(c.SHORT)
         end_short = now()
-        time_short = end_short - start
-        long_succeed = send_long_request()
-        time_long = now() - end_short
-        results.append(ResponseTimes(time_short, time_long, short_succeed, long_succeed))
+        if short_succeed:
+            time_short = end_short - start
+        else:
+            time_short = None
+        long_succeed = send_msg(c.LONG)
+        if long_succeed:
+            time_long = now() - end_short
+        else:
+            time_long = None
+        results.append(ResponseTimes(time_short, time_long))
     return results
 
 
