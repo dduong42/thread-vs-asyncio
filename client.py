@@ -2,18 +2,28 @@ import socket
 import time
 from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Tuple
+from typing import List
 
 import constants as c
 
-ResponseTimes = namedtuple('ResponseTimes', ('short_time', 'long_time'))
-Stat = namedtuple('Stat', ('total_time', 'response_times'))
+ResponseTimes = namedtuple(
+    'ResponseTimes',
+    ('start_time', 'end_short_time', 'end_time', 'short_succeeded', 'long_succeeded')
+)
+Stats = namedtuple(
+    'Stats',
+    ('start_time', 'end_time', 'response_times')
+)
 
 
 def send_msg(msg: bytes) -> bool:
     """Send a msg. Returns True on success, False otherwise"""
-    sock = socket.create_connection((c.HOSTNAME, c.PORT))
     succeed = True
+    try:
+        # 1 second timeout
+        sock = socket.create_connection((c.HOSTNAME, c.PORT), timeout=1)
+    except Exception:
+        return False
     try:
         sock.send(msg)
         sock.recv(1)
@@ -21,34 +31,28 @@ def send_msg(msg: bytes) -> bool:
         succeed = False
     finally:
         sock.close()
-    return True
+    return succeed
 
 
 def response_times(nb_requests: int, now=time.time_ns) -> List[ResponseTimes]:
     results = []
     for _ in range(nb_requests):
         start = now()
-        short_succeed = send_msg(c.SHORT)
+        short_succeeded = send_msg(c.SHORT)
         end_short = now()
-        if short_succeed:
-            time_short = end_short - start
-        else:
-            time_short = None
-        long_succeed = send_msg(c.LONG)
-        if long_succeed:
-            time_long = now() - end_short
-        else:
-            time_long = None
-        results.append(ResponseTimes(time_short, time_long))
+        long_succeeded = send_msg(c.LONG)
+        end = now()
+        results.append(ResponseTimes(start, end_short, end, short_succeeded, long_succeeded))
     return results
 
 
-def collect_stats(nb_connections: int, nb_requests=10000, now=time.time_ns) -> Stat:
-    assert nb_requests % nb_connections == 0
+def collect_stats(nb_connections: int, nb_requests=9000, now=time.time_ns) -> Stats:
     requests_per_thread = nb_requests//nb_connections
+    inputs = [requests_per_thread for _ in range(nb_connections)]
+    inputs[-1] += nb_requests % nb_connections
+    assert sum(inputs) == nb_requests
+    start = now()
     with ThreadPoolExecutor(max_workers=nb_connections) as executor:
-        start = now()
-        results = executor.map(response_times, [requests_per_thread for _ in range(nb_connections)])
-        total_time = now() - start
-    # Flatten the results
-    return Stat(total_time, [stats for l in results for stats in l])
+        results = executor.map(response_times, inputs)
+    end = now()
+    return Stats(start, end, results)
